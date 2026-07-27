@@ -1,0 +1,15 @@
+{
+  "index": "NIFTY",
+  "lots": 1,
+  "product_type": "CARRYFORWARD",
+  "order_type": "MARKET",
+  "entry_time": "15:20",
+  "weekly_exit_time": "15:18",
+  "sl_check_interval_min": 5,
+  "sl_check_mode": "candle_close",
+  "combined_sl_pct": 30.0,
+  "sl_enabled": true,
+  "market_open": "09:20",
+  "market_close": "15:25",
+  "max_lots_guard": 20
+}

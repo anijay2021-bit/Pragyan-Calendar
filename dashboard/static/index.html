@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pragyan Calendar</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--line:#e3e8f0;--txt:#111827;--sub:#6b7280;
+--grn:#16a34a;--red:#dc2626;--amb:#d97706;--blu:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+h1{font-size:17px;margin:0}
+.sub{color:var(--sub);font-size:12px}
+.spacer{margin-left:auto}
+.pill{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.paper{background:#eff6ff;color:var(--blu);border-color:#bfdbfe}
+.live{background:#fef2f2;color:var(--red);border-color:#fecaca}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.on{background:var(--grn)}.off{background:#9ca3af}
+nav{display:flex;gap:4px;padding:0 22px;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{background:none;border:none;padding:12px 16px;font-size:14px;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent}
+nav button.sel{color:var(--blu);border-bottom-color:var(--blu);font-weight:600}
+main{padding:22px;max-width:1100px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.card h2{font-size:14px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kv{background:#f9fafb;border:1px solid var(--line);border-radius:9px;padding:11px}
+.kv .k{font-size:11px;color:var(--sub);text-transform:uppercase}
+.kv .v{font-size:16px;font-weight:600;margin-top:3px;word-break:break-all}
+button.act{padding:9px 15px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:13px;margin-right:8px}
+button.act:hover{background:#f3f4f6}
+button.danger{border-color:#fecaca;color:var(--red)}
+button.primary{background:var(--blu);color:#fff;border-color:var(--blu)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);font-size:13px}
+th{font-size:11px;text-transform:uppercase;color:var(--sub)}
+input,select{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;width:150px;background:#fff}
+pre{background:#0f172a;color:#cbd5e1;padding:14px;border-radius:9px;overflow:auto;max-height:460px;font-size:12px;line-height:1.55;margin:0}
+.hide{display:none}
+.note{font-size:12px;color:var(--sub);margin-top:10px}
+.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.legs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.legs{grid-template-columns:1fr}}
+.leg{border:1px solid var(--line);border-radius:9px;padding:12px}
+.leg .t{font-size:11px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.sell{background:#fef2f2}.buy{background:#f0fdf4}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">P</div>
+  <div><h1>Pragyan Calendar</h1><div class="sub">AngelOne &middot; index calendar spread</div></div>
+  <div class="spacer"></div>
+  <span id="modePill" class="pill paper">PAPER</span>
+  <span id="svcPill" class="pill"><span class="dot off"></span><span id="svcTxt">unknown</span></span>
+  <span class="sub" id="clock"></span>
+</header>
+
+<nav>
+  <button class="sel" onclick="tab('dash',this)">Dashboard</button>
+  <button onclick="tab('set',this)">Settings</button>
+  <button onclick="tab('logs',this)">Live Logs</button>
+</nav>
+
+<main>
+  <div id="credWarn" class="warn hide"></div>
+
+  <!-- DASHBOARD -->
+  <section id="dash">
+    <div class="card">
+      <h2>Agent</h2>
+      <div class="grid" id="agentGrid"></div>
+      <div style="margin-top:15px">
+        <button class="act" onclick="svc('start')">Start</button>
+        <button class="act" onclick="svc('stop')">Stop</button>
+        <button class="act" onclick="svc('restart')">Restart</button>
+        <button class="act primary" id="modeBtn" onclick="toggleMode()">Switch to LIVE</button>
+      </div>
+      <div class="note">LIVE places real orders on your AngelOne account. The switch asks for confirmation first.</div>
+    </div>
+
+    <div class="card">
+      <h2>Open position</h2>
+      <div class="legs">
+        <div class="leg sell"><div class="t">SELL &mdash; near / weekly</div><div id="sellLegs">&mdash;</div></div>
+        <div class="leg buy"><div class="t">BUY &mdash; far / monthly</div><div id="buyLegs">&mdash;</div></div>
+      </div>
+      <div class="grid" style="margin-top:12px" id="posGrid"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="set" class="hide">
+    <div class="card">
+      <h2>Strategy settings</h2>
+      <table id="setTable"></table>
+      <div style="margin-top:15px">
+        <button class="act primary" onclick="saveSettings()">Save settings</button>
+        <span id="saveMsg" class="sub"></span>
+      </div>
+      <div class="note">Saved to settings.json, which the strategy re-reads each cycle. Changing schedule times needs a restart to reschedule the jobs.</div>
+    </div>
+  </section>
+
+  <!-- LOGS -->
+  <section id="logs" class="hide">
+    <div class="card">
+      <h2>Live logs</h2>
+      <pre id="logBox">loading...</pre>
+      <div class="note">Auto-refreshes every 5 seconds.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let CUR={};
+
+function tab(id,btn){
+  ['dash','set','logs'].forEach(s=>$(s).classList.add('hide'));
+  $(id).classList.remove('hide');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  if(id==='logs') loadLogs();
+}
+function kv(k,v){return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+(v==null?'&mdash;':v)+'</div></div>';}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+async function load(){
+  try{
+    const r=await fetch('/api/status'); if(!r.ok) return;
+    const d=await r.json(); CUR=d;
+    const st=d.state||{}, s=d.settings||{};
+
+    $('modePill').textContent=d.mode;
+    $('modePill').className='pill '+(d.mode==='LIVE'?'live':'paper');
+    $('modeBtn').textContent=(d.mode==='LIVE'?'Switch to PAPER':'Switch to LIVE');
+    $('modeBtn').className='act '+(d.mode==='LIVE'?'danger':'primary');
+
+    const running=d.service==='active';
+    $('svcTxt').textContent=running?'running':d.service;
+    $('svcPill').innerHTML='<span class="dot '+(running?'on':'off')+'"></span>'+(running?'running':d.service);
+    $('clock').textContent=(d.server_time||'').replace('T',' ');
+
+    if(d.missing_credentials&&d.missing_credentials.length){
+      $('credWarn').classList.remove('hide');
+      $('credWarn').textContent='Missing in .env: '+d.missing_credentials.join(', ')+'. The agent cannot connect until these are set.';
+    } else $('credWarn').classList.add('hide');
+
+    $('agentGrid').innerHTML=kv('Index',s.index)+kv('Phase',st.phase)+kv('Mode',d.mode)
+      +kv('Lots',s.lots)+kv('Service',d.service);
+
+    $('posGrid').innerHTML=kv('ATM strike',st.atm_strike)+kv('Weekly expiry',st.weekly_expiry)
+      +kv('Monthly expiry',st.monthly_expiry)+kv('Short premium',st.combined_entry_price)
+      +kv('Stop loss',st.combined_sl)+kv('Lot size',st.lot_size);
+
+    $('sellLegs').innerHTML=legHtml(st.sell_legs);
+    $('buyLegs').innerHTML=legHtml(st.buy_legs);
+
+    if(!$('setTable').dataset.built) buildSettings(s);
+  }catch(e){}
+}
+
+function legHtml(legs){
+  if(!legs) return '&mdash;';
+  let h='';
+  ['CE','PE'].forEach(o=>{
+    const l=legs[o]||{};
+    h+='<div style="margin-bottom:6px"><b>'+o+'</b> '+(l.symbol?esc(l.symbol):'&mdash;')
+      +'<br><span class="sub">'+(l.entry_price!=null?('@ '+l.entry_price):'')
+      +(l.state?(' &middot; '+l.state):'')+'</span></div>';
+  });
+  return h;
+}
+
+function buildSettings(s){
+  const fields=[
+    ['index','Index','select',['NIFTY','BANKNIFTY']],
+    ['lots','Lots per leg','number'],
+    ['combined_sl_pct','Combined SL %','number'],
+    ['sl_enabled','Stop loss enabled','select',[true,false]],
+    ['sl_check_interval_min','SL check interval (min)','number'],
+    ['sl_check_mode','SL check mode','select',['candle_close','ltp']],
+    ['entry_time','Entry / roll time (IST)','text'],
+    ['weekly_exit_time','Weekly exit time (IST)','text'],
+    ['product_type','Product type','select',['CARRYFORWARD','INTRADAY']],
+    ['order_type','Order type','select',['MARKET','LIMIT']],
+    ['market_open','SL window start','text'],
+    ['market_close','SL window end','text'],
+    ['max_lots_guard','Max lots guard','number']
+  ];
+  let h='<tr><th>Setting</th><th>Value</th></tr>';
+  fields.forEach(f=>{
+    const [k,label,type,opts]=f; const v=s[k];
+    let input;
+    if(type==='select'){
+      input='<select id="f_'+k+'">'+opts.map(o=>'<option value="'+o+'"'+(String(o)===String(v)?' selected':'')+'>'+o+'</option>').join('')+'</select>';
+    } else {
+      input='<input id="f_'+k+'" type="'+type+'" value="'+(v==null?'':v)+'">';
+    }
+    h+='<tr><td>'+label+'<br><span class="sub">'+k+'</span></td><td>'+input+'</td></tr>';
+  });
+  $('setTable').innerHTML=h;
+  $('setTable').dataset.built='1';
+}
+
+async function saveSettings(){
+  const keys=['index','lots','combined_sl_pct','sl_enabled','sl_check_interval_min','sl_check_mode',
+    'entry_time','weekly_exit_time','product_type','order_type','market_open','market_close','max_lots_guard'];
+  const body={};
+  keys.forEach(k=>{
+    const el=$('f_'+k); if(!el) return;
+    let v=el.value;
+    if(['lots','sl_check_interval_min','max_lots_guard'].includes(k)) v=parseInt(v,10);
+    else if(k==='combined_sl_pct') v=parseFloat(v);
+    else if(k==='sl_enabled') v=(v==='true');
+    body[k]=v;
+  });
+  const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  $('saveMsg').textContent=r.ok?'Saved.':('Error: '+(d.detail||'failed'));
+  setTimeout(()=>{$('saveMsg').textContent='';},4000);
+  load();
+}
+
+async function svc(a){
+  if(a==='stop'&&!confirm('Stop the agent?')) return;
+  await fetch('/api/service/'+a,{method:'POST'});
+  setTimeout(load,1500);
+}
+
+async function toggleMode(){
+  const target=(CUR.mode==='LIVE')?'PAPER':'LIVE';
+  if(target==='LIVE'&&!confirm('Switch to LIVE?\n\nReal orders will be placed on your AngelOne account.')) return;
+  const r=await fetch('/api/mode',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mode:target,confirm:true})});
+  if(!r.ok){const d=await r.json();alert('Failed: '+(d.detail||'error'));}
+  setTimeout(load,1800);
+}
+
+async function loadLogs(){
+  try{
+    const r=await fetch('/api/logs?lines=300'); if(!r.ok) return;
+    const d=await r.json();
+    $('logBox').textContent=(d.lines||[]).join('\n')||'(empty)';
+    $('logBox').scrollTop=$('logBox').scrollHeight;
+  }catch(e){}
+}
+
+load();
+setInterval(load,5000);
+setInterval(()=>{if(!$('logs').classList.contains('hide'))loadLogs();},5000);
+</script>
+</body>
+</html>
