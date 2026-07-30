@@ -77,6 +77,9 @@ DEFAULT_SETTINGS = {
     "market_open": "09:20",
     "market_close": "15:25",
     "max_lots_guard": 20,
+    "hedge_enabled": False,
+    "hedge_offset_strikes": 5,
+    "hedge_entry_time": "15:00",
 }
 
 # Settings the dashboard is allowed to change.

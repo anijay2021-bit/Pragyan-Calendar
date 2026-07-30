@@ -100,6 +100,15 @@ def job_sl(strategy):
         logger.exception("SL check failed")
 
 
+def job_hedge(strategy):
+    """Runs daily; enter_hedge() itself checks whether tomorrow is the sold
+    weekly leg's expiry, so this is a no-op on every other day."""
+    try:
+        strategy.enter_hedge()
+    except Exception:
+        logger.exception("hedge entry job failed")
+
+
 def self_check(strategy):
     """Prove data + contract selection work. Places no orders."""
     spot = strategy._spot()
@@ -149,6 +158,7 @@ def main():
     tf = int(settings["sl_check_interval_min"])
     open_h, open_m = _hhmm(settings["market_open"], (9, 20))
     close_h, _ = _hhmm(settings["market_close"], (15, 25))
+    hg_h, hg_m = _hhmm(settings.get("hedge_entry_time", "15:00"), (15, 0))
 
     sched = BlockingScheduler(timezone=IST)
     sched.add_job(job_exit, CronTrigger(day_of_week="mon-fri", hour=ex_h, minute=ex_m),
@@ -159,11 +169,14 @@ def main():
                                       hour="%d-%d" % (open_h, close_h),
                                       minute="*/%d" % tf),
                   args=[strategy], id="sl", name="SL check every %d min" % tf)
+    sched.add_job(job_hedge, CronTrigger(day_of_week="mon-fri", hour=hg_h, minute=hg_m),
+                  args=[strategy], id="hedge", name="Margin hedge at %02d:%02d" % (hg_h, hg_m))
 
     logger.info("=" * 60)
     logger.info("Pragyan Calendar | %s | mode=%s", settings["index"], credentials.trading_mode)
-    logger.info("Exit  %02d:%02d | Entry %02d:%02d | SL every %d min",
-                ex_h, ex_m, en_h, en_m, tf)
+    logger.info("Exit  %02d:%02d | Entry %02d:%02d | SL every %d min | Hedge %02d:%02d (%s)",
+                ex_h, ex_m, en_h, en_m, tf, hg_h, hg_m,
+                "ON" if settings.get("hedge_enabled") else "off")
     logger.info("Lots=%s  SL=%s%%  product=%s",
                 settings["lots"], settings["combined_sl_pct"], settings["product_type"])
     logger.info("=" * 60)

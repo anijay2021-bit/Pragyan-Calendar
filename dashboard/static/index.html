@@ -86,6 +86,7 @@ pre{background:#0f172a;color:#cbd5e1;padding:14px;border-radius:9px;overflow:aut
       <div class="legs">
         <div class="leg sell"><div class="t">SELL &mdash; near / weekly</div><div id="sellLegs">&mdash;</div></div>
         <div class="leg buy"><div class="t">BUY &mdash; far / monthly</div><div id="buyLegs">&mdash;</div></div>
+        <div class="leg"><div class="t">HEDGE &mdash; margin wings (T-1)</div><div id="hedgeLegs">&mdash;</div></div>
       </div>
       <div class="grid" style="margin-top:12px" id="posGrid"></div>
     </div>
@@ -158,6 +159,7 @@ async function load(){
 
     $('sellLegs').innerHTML=legHtml(st.sell_legs);
     $('buyLegs').innerHTML=legHtml(st.buy_legs);
+    $('hedgeLegs').innerHTML=legHtml(st.hedge_legs);
 
     if(!$('setTable').dataset.built) buildSettings(s);
   }catch(e){}
@@ -189,7 +191,10 @@ function buildSettings(s){
     ['order_type','Order type','select',['MARKET','LIMIT']],
     ['market_open','SL window start','text'],
     ['market_close','SL window end','text'],
-    ['max_lots_guard','Max lots guard','number']
+    ['max_lots_guard','Max lots guard','number'],
+    ['hedge_enabled','Margin hedge enabled','select',[true,false]],
+    ['hedge_offset_strikes','Hedge offset (strikes)','number'],
+    ['hedge_entry_time','Hedge entry time (IST, day before expiry)','text']
   ];
   let h='<tr><th>Setting</th><th>Value</th></tr>';
   fields.forEach(f=>{
@@ -208,14 +213,15 @@ function buildSettings(s){
 
 async function saveSettings(){
   const keys=['index','lots','combined_sl_pct','sl_enabled','sl_check_interval_min','sl_check_mode',
-    'entry_time','weekly_exit_time','product_type','order_type','market_open','market_close','max_lots_guard'];
+    'entry_time','weekly_exit_time','product_type','order_type','market_open','market_close','max_lots_guard',
+    'hedge_enabled','hedge_offset_strikes','hedge_entry_time'];
   const body={};
   keys.forEach(k=>{
     const el=$('f_'+k); if(!el) return;
     let v=el.value;
-    if(['lots','sl_check_interval_min','max_lots_guard'].includes(k)) v=parseInt(v,10);
+    if(['lots','sl_check_interval_min','max_lots_guard','hedge_offset_strikes'].includes(k)) v=parseInt(v,10);
     else if(k==='combined_sl_pct') v=parseFloat(v);
-    else if(k==='sl_enabled') v=(v==='true');
+    else if(k==='sl_enabled'||k==='hedge_enabled') v=(v==='true');
     body[k]=v;
   });
   const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

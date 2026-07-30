@@ -70,6 +70,7 @@ class CalendarSpreadStrategy:
             "lot_size": None,
             "sell_legs": {"CE": leg(), "PE": leg()},
             "buy_legs": {"CE": leg(), "PE": leg()},
+            "hedge_legs": {"CE": leg(), "PE": leg()},
             "combined_entry_price": None,
             "combined_sl": None,
             "mode": credentials.trading_mode,
@@ -226,6 +227,7 @@ class CalendarSpreadStrategy:
         """Buy back the sold weekly legs. Monthly longs stay open."""
         if self.state["phase"] != Phase.ACTIVE:
             return False
+        self.exit_hedge()
         closed = []
         for opt in ("CE", "PE"):
             leg = self.state["sell_legs"][opt]
@@ -285,10 +287,76 @@ class CalendarSpreadStrategy:
         )
         return True
 
+    # --------------------------------------------------- margin hedge (T-1)
+
+    def enter_hedge(self):
+        """
+        Buy protective OTM wings the trading day before the sold weekly leg's
+        own expiry. Purpose: SEBI removes calendar/spread margin benefit on
+        the expiry day itself, so a naked short would suddenly demand full
+        margin. A cheap OTM wing on each side restores spread-margin
+        treatment. Independent add-on: never touches sell_legs or buy_legs,
+        and has no effect on entry/roll/exit timing of the core calendar.
+        """
+        self.refresh_settings()
+        if not self.settings.get("hedge_enabled", False):
+            return False
+        if self.state["phase"] != Phase.ACTIVE:
+            return False
+        if self.state["hedge_legs"]["CE"]["state"] != LegState.IDLE:
+            return False  # already hedged for this leg
+        weekly_expiry = self.state.get("weekly_expiry")
+        if not weekly_expiry:
+            return False
+        expiry = datetime.date.fromisoformat(str(weekly_expiry))
+        if expiry != _today() + datetime.timedelta(days=1):
+            return False  # only the day before that leg's own expiry
+
+        offset = int(self.settings.get("hedge_offset_strikes", 5))
+        step = self.chain.strike_step
+        atm = int(self.state["atm_strike"])
+
+        done = []
+        for opt, strike in (("CE", atm + offset * step), ("PE", atm - offset * step)):
+            c = self.chain.get(expiry, strike, opt)
+            price = self._ltp(c)
+            oid = self._order(c, "BUY", price)
+            self.state["hedge_legs"][opt] = {
+                "symbol": c["symbol"], "token": c["token"], "entry_price": price,
+                "order_id": oid, "state": LegState.BOUGHT,
+            }
+            done.append("%s %s @ %.2f" % (opt, c["symbol"], price))
+            logger.info("BUY hedge %s %s @ %.2f", opt, c["symbol"], price)
+
+        self._save_state()
+        self._notify("*Margin hedge BOUGHT* (T-1 of expiry)\n" + "\n".join(done))
+        return True
+
+    def exit_hedge(self):
+        """Close any open hedge wings. Called from both the weekly and the
+        monthly squareoff so a hedge is never left open past its purpose."""
+        closed = []
+        for opt in ("CE", "PE"):
+            leg = self.state["hedge_legs"][opt]
+            if leg["state"] != LegState.BOUGHT:
+                continue
+            c = {"symbol": leg["symbol"], "token": leg["token"]}
+            price = self._ltp(c)
+            self._order(c, "SELL", price)
+            leg["state"] = LegState.EXITED
+            leg["exit_price"] = price
+            closed.append("%s @ %.2f" % (opt, price))
+            logger.info("Exited hedge %s %s @ %.2f", opt, leg["symbol"], price)
+        if closed:
+            self._save_state()
+            self._notify("*Margin hedge closed*\n" + "\n".join(closed))
+        return bool(closed)
+
     def exit_all(self):
         """Close every open leg - run on monthly expiry."""
         if self.state["phase"] != Phase.ACTIVE:
             return False
+        self.exit_hedge()
         done = []
         for book, closing_side in (("sell_legs", "BUY"), ("buy_legs", "SELL")):
             for opt in ("CE", "PE"):
