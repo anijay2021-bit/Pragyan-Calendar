@@ -145,6 +145,77 @@ class CalendarSpreadStrategy:
         except Exception as exc:
             logger.warning("Telegram failed: %s", exc)
 
+    # --------------------------------------------------- position reconcile
+
+    def reconcile(self):
+        """
+        Safety gate: compare local state against live broker positions
+        before any scheduled action touches the book. Returns True only if
+        every leg this state file believes is open (SOLD or BOUGHT) matches
+        a live position at the broker with the right side and exact
+        quantity. On any mismatch - or if positions can't be fetched at all
+        - returns False and alerts, without touching state or placing any
+        order. A manual order placed directly at the broker (e.g. booking
+        profit on one leg by hand) is exactly what this is meant to catch.
+        No-ops (returns True) when there is no active cycle to check.
+        """
+        if self.state["phase"] != Phase.ACTIVE:
+            return True
+
+        try:
+            live = self.broker.positions()
+        except Exception as exc:
+            logger.error("Reconcile: could not fetch broker positions (%s)", exc)
+            self._notify(
+                "*RECONCILE FAILED*\nCould not fetch live positions from broker (%s).\n"
+                "Skipping this action until positions can be verified." % exc
+            )
+            return False
+
+        by_token = {}
+        for p in live:
+            tok = str(p.get("symboltoken") or p.get("symbolToken") or "")
+            if not tok:
+                continue
+            try:
+                qty = int(p.get("netqty") or p.get("netQty") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            by_token[tok] = by_token.get(tok, 0) + qty
+
+        # Quantity this cycle was actually sized at when it was opened -
+        # not the *current* settings.lots, which may have changed since.
+        expected_qty = int(self.state.get("lot_size") or self.chain.lot_size) * int(
+            self.state.get("lots") or self.settings["lots"]
+        )
+
+        mismatches = []
+        for book, sign in (("sell_legs", -1), ("buy_legs", 1), ("hedge_legs", 1)):
+            for opt in ("CE", "PE"):
+                leg = self.state[book][opt]
+                if leg["state"] not in (LegState.SOLD, LegState.BOUGHT):
+                    continue
+                tok = str(leg.get("token") or "")
+                live_qty = by_token.get(tok, 0)
+                ok = (live_qty * sign > 0) and (abs(live_qty) == expected_qty)
+                if not ok:
+                    mismatches.append(
+                        "%s/%s %s: expected %s%d at broker, found %d"
+                        % (book, opt, leg.get("symbol"), "-" if sign < 0 else "+", expected_qty, live_qty)
+                    )
+
+        if mismatches:
+            logger.error("RECONCILE MISMATCH:\n%s", "\n".join(mismatches))
+            self._notify(
+                "*RECONCILE MISMATCH - action blocked*\n" + "\n".join(mismatches) +
+                "\n\nA leg looks different at the broker than in the bot's own records "
+                "(likely a manual order placed directly at the broker). No automatic "
+                "action will be taken until this is resolved."
+            )
+            return False
+
+        return True
+
     # ------------------------------------------------------------------ entry
 
     def enter(self):
@@ -227,6 +298,8 @@ class CalendarSpreadStrategy:
         """Buy back the sold weekly legs. Monthly longs stay open."""
         if self.state["phase"] != Phase.ACTIVE:
             return False
+        if not self.reconcile():
+            return False
         self.exit_hedge()
         closed = []
         for opt in ("CE", "PE"):
@@ -249,6 +322,8 @@ class CalendarSpreadStrategy:
         """Sell the next weekly straddle at the current ATM."""
         self.refresh_settings()
         if self.state["phase"] != Phase.ACTIVE:
+            return False
+        if not self.reconcile():
             return False
 
         spot = self._spot()
@@ -303,6 +378,8 @@ class CalendarSpreadStrategy:
             return False
         if self.state["phase"] != Phase.ACTIVE:
             return False
+        if not self.reconcile():
+            return False
         if self.state["hedge_legs"]["CE"]["state"] != LegState.IDLE:
             return False  # already hedged for this leg
         weekly_expiry = self.state.get("weekly_expiry")
@@ -356,6 +433,8 @@ class CalendarSpreadStrategy:
         """Close every open leg - run on monthly expiry."""
         if self.state["phase"] != Phase.ACTIVE:
             return False
+        if not self.reconcile():
+            return False
         self.exit_hedge()
         done = []
         for book, closing_side in (("sell_legs", "BUY"), ("buy_legs", "SELL")):
@@ -380,6 +459,8 @@ class CalendarSpreadStrategy:
         """Combined stop-loss on the short premium."""
         self.refresh_settings()
         if self.state["phase"] != Phase.ACTIVE or not self.settings.get("sl_enabled", True):
+            return False
+        if not self.reconcile():
             return False
         sl = self.state.get("combined_sl")
         if not sl:
