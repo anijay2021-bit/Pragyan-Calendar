@@ -28,6 +28,9 @@ from strategies.instruments import OptionChain
 
 IST = pytz.timezone("Asia/Kolkata")
 
+# Render log timestamps in IST even though the server clock is UTC.
+logging.Formatter.converter = lambda *a: datetime.datetime.now(IST).timetuple()
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s IST [%(levelname)s] %(name)s: %(message)s",

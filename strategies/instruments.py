@@ -199,7 +199,11 @@ class OptionChain:
         The calendar spread:
           SELL the near (weekly) straddle, BUY the far (monthly) straddle.
         """
-        weekly = self.weekly_expiry()
+        # A new cycle must never sell a contract expiring today. On expiry day
+        # the position is squared off first, then the near leg rolls forward to
+        # the next weekly - so the floor is tomorrow, not today.
+        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        weekly = self.weekly_expiry(on_or_after=tomorrow)
         monthly = self.monthly_expiry(after=weekly)
         atm = self.atm_strike(spot)
         return {
