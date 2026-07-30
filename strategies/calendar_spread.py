@@ -110,8 +110,18 @@ class CalendarSpreadStrategy:
 
     @property
     def qty(self):
+        """
+        Quantity per leg. Frozen at whatever 'lots' was when this cycle was
+        entered (self.state['lots']), for the life of the cycle - so a
+        mid-cycle change to the 'lots' setting can never desync the weekly
+        SELL legs, monthly BUY legs and hedge wings from each other, or from
+        what reconcile() expects to see at the broker. A new 'lots' value
+        only takes effect on the next fresh entry() (when there is no
+        frozen lots yet).
+        """
         lot_size = self.state.get("lot_size") or self.chain.lot_size
-        return int(lot_size) * int(self.settings["lots"])
+        lots = self.state.get("lots") or self.settings["lots"]
+        return int(lot_size) * int(lots)
 
     def _spot(self):
         ref = self.chain.spot_ref()
